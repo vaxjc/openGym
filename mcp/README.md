@@ -65,6 +65,22 @@ For Cursor and other MCP-compatible clients, see the client's MCP docs — the s
 Restart the client; you should see the openGym tools appear with "serving profile \<name\>" on
 the server's stderr.
 
+## Remote mode (no data directory on this machine)
+
+When openGym runs on a server and this machine has no copy of its `./data`, the read tools can
+read the profile from the server instead, the way a paired phone pulls it: leave `OPENGYM_DATA`
+unset (and have no `./data` in the working directory) and set `OPENGYM_URL` with a paired token
+(see [Pairing](#pairing)). Every tool call reads `GET /api/data` (cached for 5 seconds), so the
+answers match what the app shows right now. `OPENGYM_TOKEN_FILE` can point at a file holding the
+token instead of putting it in the client's config:
+
+```jsonc
+"env": {
+  "OPENGYM_URL": "https://gym.example.com",
+  "OPENGYM_TOKEN_FILE": "/Users/me/.config/opengym/token"
+}
+```
+
 ## Tools
 
 Ten read-only tools, and one that writes:
@@ -81,6 +97,10 @@ Ten read-only tools, and one that writes:
 | `estimate_1rm` | All-time best 1RM for an exercise + the trend, or a PR table across all exercises. |
 | `muscle_balance` | Which muscles I've trained this week/month/all-time, ranked + which I've neglected. |
 | `get_programme` | My programmes (routines as a block of weeks with %1RM / RPE targets), and which week of the running one I'm in. |
+| `create_routine` | *Writes.* A new routine from exercises with sets/reps (or a rep range), holds in seconds, cardio in minutes; optionally put on weekdays. `dry_run` previews it. |
+| `update_routine` | *Writes.* Rename a routine or replace its exercise list; per-exercise settings (progression, increments) stay on exercises that remain. |
+| `delete_routine` | *Writes.* Deletes a routine and clears it from the week; needs `confirm: true`. |
+| `set_week_schedule` | *Writes.* Which routines go on which weekdays; days left out stay as they are. |
 | `log_workout` | *Writes.* "I did dumbbell curls, 12 kg, 12/12/10" → a logged session in your history, on every device. Needs pairing: [Logging workouts](#logging-workouts). |
 
 `get_routine` and `preview_session` answer two different questions, and confusing them is the
@@ -160,7 +180,7 @@ Things to know about that token:
 
 ### What it does not do (yet)
 
-- Cardio by time and speed, supersets, per-side sets. Log those in the app.
+- Supersets and per-side sets. Log those in the app. (Cardio logs as minutes, with speed in km/h and incline when given.)
 - Edit or delete a workout. Fix a mistake in the app's History.
 - Complete a routine's session. A logged workout is freestyle: it counts in history, stats,
   1RM, PRs and the muscle map, and like any freestyle session it can inform a routine that has

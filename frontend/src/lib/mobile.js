@@ -16,7 +16,7 @@ import { NUDGE_COPY, lineIndex, nudgeFor, nudgeMinute, toneOf } from './nudge.js
 import { excusedOn } from './day-notes.js'
 import { stateJson } from './state-json.js'
 
-export const MOBILE = import.meta.env.VITE_MOBILE === '1'
+export const MOBILE = (import.meta.env || {}).VITE_MOBILE === '1'
 
 // Some features only make sense on Android. The in-app updater downloads an .apk and hands it
 // to the system package installer — there is no equivalent on iOS (App Store only) or on the

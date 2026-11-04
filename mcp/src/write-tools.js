@@ -45,7 +45,7 @@ const inputOf = p => ({
     createCustom: ex.create_custom,
     bodyPart: ex.body_part,
     note: ex.note,
-    sets: (ex.sets || []).map(s => ({ reps: s.reps, seconds: s.seconds, weight: s.weight, warmup: s.warmup, failure: s.failure, rir: s.rir, rpe: s.rpe })),
+    sets: (ex.sets || []).map(s => ({ reps: s.reps, seconds: s.seconds, weight: s.weight, warmup: s.warmup, failure: s.failure, rir: s.rir, rpe: s.rpe, minutes: s.minutes, speed: s.speed, incline: s.incline })),
   })),
 })
 
@@ -92,6 +92,9 @@ function viewOf(w, S, resolved) {
 const setSchema = z.object({
   reps: z.number().int().min(1).max(LOG_LIMITS.maxReps).optional().describe('Reps done. Give reps for a rep exercise, or seconds for a hold, never both in one exercise.'),
   seconds: z.number().min(1).max(LOG_LIMITS.maxSec).optional().describe('Seconds held, for a timed exercise (plank, hang, wall sit).'),
+  minutes: z.number().positive().max(LOG_LIMITS.maxCardioMin).optional().describe('Minutes, for a cardio exercise (run, bike, rower). A cardio set is minutes only, plus speed and incline if the user said them.'),
+  speed: z.number().positive().max(LOG_LIMITS.maxSpeedKmh).optional().describe('Cardio speed in km/h (convert mph). Only if the user said it; never guess a pace.'),
+  incline: z.number().min(0).max(LOG_LIMITS.maxIncline).optional().describe('Cardio incline in %, if the user said it.'),
   weight: z.number().min(0).optional().describe('Load in `unit`. Omit or 0 for bodyweight. On an assistance machine it is the help (less is better). For dumbbells: as the profile logs that exercise (see weight_means in the reply).'),
   warmup: z.boolean().optional().describe('A warm-up set: kept out of volume, PRs and the next suggested weight.'),
   failure: z.boolean().optional().describe('Taken to failure.'),
@@ -108,7 +111,8 @@ export const logWorkout = {
     'Exercises are matched against the user\'s library by name or id. A common name resolves to the library\'s default variant ("shoulder press" is the barbell one): when the reply\'s `name` differs from `you_said` and the variant matters (dumbbell vs barbell, machine vs cable), confirm with the user, or pass an id. If a name matches several exercises, or none, nothing is saved and `problems` lists candidates: ask the user which one, then call again with its id.',
     'Only set create_custom for an exercise the user confirms is not in the library.',
     'Call with dry_run: true first when you had to interpret anything, show the user the preview, and log it once they agree.',
-    'Calling again with the same description does not log it twice. Cardio (time and speed) and supersets are not supported here.',
+    'Cardio (a run, a bike ride) is one set per bout with minutes, and speed in km/h only when the user gave it: "10 min jogging" is {minutes: 10} on a run exercise.',
+    'Calling again with the same description does not log it twice. Supersets are not supported here.',
   ].join(' '),
   schema: {
     date: isoDate().optional().describe('YYYY-MM-DD the session was done; defaults to today. Not in the future.'),

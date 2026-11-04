@@ -7,7 +7,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { TOOLS } from './tools.js'
 import { WRITE_TOOLS } from './write-tools.js'
-import { init, getUser } from './state.js'
+import { init, getUser, refresh, remoteMode } from './state.js'
+import { ROUTINE_TOOLS } from './routine-tools.js'
 
 const server = new McpServer({
   name: 'opengym',
@@ -18,16 +19,17 @@ const server = new McpServer({
 // the no-state sentinel. Always register every tool so the LLM sees the full list at
 // handshake, even when state didn't resolve.
 try {
-  init()
+  if (remoteMode()) await refresh()
+  else init()
   const u = getUser()
-  console.error(`[opengym-mcp] serving profile ${u.name} (${u.id})`)
+  console.error(`[opengym-mcp] serving profile ${u.name} (${u.id})${remoteMode() ? ' from ' + process.env.OPENGYM_URL : ''}`)
 } catch (e) {
   console.error(`[opengym-mcp] ${e.message}`)
   // Don't exit — keep the tool listings up so the user sees a useful error after fixing their
   // env and restarting.
 }
 
-for (const t of [...TOOLS, ...WRITE_TOOLS]) {
+for (const t of [...TOOLS, ...WRITE_TOOLS, ...ROUTINE_TOOLS]) {
   server.tool(
     t.name,
     t.description,
@@ -35,6 +37,8 @@ for (const t of [...TOOLS, ...WRITE_TOOLS]) {
     async (params) => {
       try {
         // log_workout talks to the server, so a handler may answer with a promise.
+        // Remote mode: the profile as the server has it now (a no-op with a data directory).
+        await refresh()
         const result = await t.handler(params || {})
         return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] }
       } catch (err) {

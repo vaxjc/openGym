@@ -81,6 +81,35 @@ describe('what the user said becomes the workout Finish would have saved', () =>
     const r = build(profile(), { date: TODAY, exercises: [{ exercise: 'treadmill running', sets: [{ reps: 1 }] }] })
     expect(r.problems).toBeDefined()
   })
+
+  it('"10 min run": a cardio entry in minutes, no speed made up', () => {
+    const r = build(profile(), { date: TODAY, exercises: [{ exercise: '0684', sets: [{ minutes: 10 }] }] })
+    expect(r.problems).toBeUndefined()
+    const e = r.workout.entries[0]
+    expect(e.sets).toEqual([{ min: 10, done: true }])
+    expect(e.target.mode).toBe('cardio')
+    expect(r.resolved[0].mode).toBe('cardio')
+    expect(setLabel(e.id, e.sets[0], e.target)).toMatch(/10 min/)
+  })
+
+  it('cardio keeps speed (km/h) and incline when given, and checks their bounds', () => {
+    const r = build(profile(), { date: TODAY, exercises: [{ exercise: '0684', sets: [{ minutes: 20, speed: 9.5, incline: 2 }] }] })
+    expect(r.workout.entries[0].sets).toEqual([{ min: 20, speed: 9.5, incline: 2, done: true }])
+    expect(build(profile(), { date: TODAY, exercises: [{ exercise: '0684', sets: [{ minutes: 20, speed: 500 }] }] }).problems[0].field).toBe('exercises[0].sets[0]')
+    expect(build(profile(), { date: TODAY, exercises: [{ exercise: '0684', sets: [{ minutes: 0 }] }] }).problems).toBeDefined()
+  })
+
+  it('minutes on a lift are refused, and a cardio row next to lifts keeps both', () => {
+    expect(build(profile(), { date: TODAY, exercises: [{ exercise: '0025', sets: [{ minutes: 5 }] }] }).problems[0].problem).toMatch(/cardio/)
+    const r = build(profile(), { date: TODAY, exercises: [{ exercise: '0684', sets: [{ minutes: 10 }] }, { exercise: '0662', sets: [{ reps: 12 }] }] })
+    expect(r.workout.entries.map(e => e.id)).toEqual(['0684', '0662'])
+  })
+
+  it('a custom cardio exercise logs in minutes', () => {
+    const r = build(profile(), { date: TODAY, exercises: [{ exercise: 'Trail jog', createCustom: true, bodyPart: 'cardio', sets: [{ minutes: 30 }] }] })
+    expect(r.problems).toBeUndefined()
+    expect(r.workout.entries[0].sets[0].min).toBe(30)
+  })
 })
 
 describe('the numbers', () => {

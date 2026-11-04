@@ -24,7 +24,7 @@ import { exerciseMuscleSnapshot } from './muscles.js'
 
 const LB_TO_KG = 0.45359237
 // The importer's bounds (import-csv.js MAX_KG / MAX_REPS): nobody lifts 2 t or does 1,000 reps.
-export const LOG_LIMITS = { maxKg: 2000, maxReps: 1000, maxSec: 6 * 3600, maxSets: 50, maxExercises: 40, maxDurationMin: 24 * 60 }
+export const LOG_LIMITS = { maxKg: 2000, maxReps: 1000, maxSec: 6 * 3600, maxSets: 50, maxExercises: 40, maxDurationMin: 24 * 60, maxCardioMin: 24 * 60, maxSpeedKmh: 100, maxIncline: 40 }
 export const BODY_PARTS = ['back', 'cardio', 'chest', 'lower arms', 'lower legs', 'neck', 'shoulders', 'upper arms', 'upper legs', 'waist']
 
 // The least a "just did" squeezed in after today's last session lasts.
@@ -95,12 +95,34 @@ function rowOf(set, mode, toProfile) {
   return { row }
 }
 
+// A cardio set as the app stores it ({ min, speed } with speed in km/h, as lib/speed.js keeps it
+// whatever unit the profile shows). Speed and incline are left out when nobody said them, rather
+// than invented: "10 min jogging" reads back as 10 min, not 10 min at a made-up pace.
+function cardioRowOf(set) {
+  if (set?.reps != null || set?.seconds != null || set?.weight != null) return { problem: 'a cardio set is minutes (and optionally speed in km/h and incline %), not reps, seconds or weight' }
+  const min = num(set?.minutes)
+  if (min == null || min <= 0 || min > LOG_LIMITS.maxCardioMin) return { problem: `minutes must be more than 0 and at most ${LOG_LIMITS.maxCardioMin}` }
+  const row = { min: Math.round(min * 100) / 100, done: true }
+  if (set.speed != null) {
+    const v = num(set.speed)
+    if (v == null || v <= 0 || v > LOG_LIMITS.maxSpeedKmh) return { problem: `speed must be more than 0 and at most ${LOG_LIMITS.maxSpeedKmh} km/h` }
+    row.speed = Math.round(v * 100) / 100
+  }
+  if (set.incline != null) {
+    const v = num(set.incline)
+    if (v == null || v < 0 || v > LOG_LIMITS.maxIncline) return { problem: `incline must be 0–${LOG_LIMITS.maxIncline} %` }
+    if (v > 0) row.incline = v
+  }
+  if (set.warmup === true) row.phase = 'warmup'
+  return { row }
+}
+
 /**
  * Build the workout a description stands for, against profile `S`, without touching it.
  *
  * `input`: { date: 'YYYY-MM-DD', start?: 'HH:MM', durationMin?, name?, note?, unit?: 'kg'|'lb',
  *   exercises: [{ exercise, createCustom?, bodyPart?, note?,
- *     sets: [{ reps? | seconds?, weight?, warmup?, failure?, rir? | rpe? }] }] }
+ *     sets: [{ reps? | seconds?, weight?, warmup?, failure?, rir? | rpe? } | { minutes, speed?, incline?, warmup? }] }] }
  *
  * Returns { workout, past, customEx, resolved } or { problems }: every problem in the whole
  * description at once, so one round trip to the user settles them all.
@@ -154,13 +176,27 @@ export function buildLoggedWorkout(S, input, { now = Date.now(), unit: fallbackU
       problems.push({ field: at + '.exercise', exercise: ex?.exercise ?? null, problem: hit.problem, ...(hit.candidates ? { candidates: hit.candidates } : {}) })
       return
     }
-    if (isCardio(hit.id) || customEx.find(c => c.id === hit.id)?.bp === 'cardio') {
-      problems.push({ field: at + '.exercise', exercise: ex.exercise, problem: 'cardio (time and speed) cannot be logged this way yet' })
-      return
-    }
     const sets = Array.isArray(ex.sets) ? ex.sets : []
     if (!sets.length || sets.length > LOG_LIMITS.maxSets) {
       problems.push({ field: at + '.sets', problem: `1–${LOG_LIMITS.maxSets} sets` })
+      return
+    }
+    const cardio = isCardio(hit.id) || [...(S.customEx || []), ...customEx].find(c => c?.id === hit.id)?.bp === 'cardio'
+    if (cardio || sets.some(s => s?.minutes != null)) {
+      if (!cardio) {
+        problems.push({ field: at + '.sets', exercise: ex.exercise, problem: 'minutes are for cardio exercises; give reps or seconds' })
+        return
+      }
+      const rows = []
+      sets.forEach((s, j) => {
+        const where = `${at}.sets[${j}]`
+        const row = cardioRowOf(s)
+        if (row.problem) problems.push({ field: where, problem: row.problem })
+        else rows.push(row.row)
+      })
+      const note = String(ex.note ?? '').trim().slice(0, 280)
+      entries.push({ id: hit.id, sets: rows, target: { id: hit.id, mode: 'cardio' }, ...(note ? { note } : {}) })
+      resolved.push({ input: ex.exercise, id: hit.id, name: hit.name, mode: 'cardio', ...(hit.created ? { created: true } : {}) })
       return
     }
     const timed = sets.some(s => s?.seconds != null), counted = sets.some(s => s?.reps != null)
@@ -239,7 +275,8 @@ export function buildLoggedWorkout(S, input, { now = Date.now(), unit: fallbackU
   const id = importId('mw', JSON.stringify([
     date, input.start ?? null, dur ?? null, input.name ?? null, input.note ?? null, input.unit ?? null,
     exercises.map(ex => [ex.exercise, ex.createCustom === true, ex.note ?? null,
-      ex.sets.map(s => [s.reps ?? null, s.seconds ?? null, s.weight ?? null, s.warmup === true, s.failure === true, s.rir ?? null, s.rpe ?? null])]),
+      ex.sets.map(s => [s.reps ?? null, s.seconds ?? null, s.weight ?? null, s.warmup === true, s.failure === true, s.rir ?? null, s.rpe ?? null,
+        ...(s.minutes != null || s.speed != null || s.incline != null ? [s.minutes ?? null, s.speed ?? null, s.incline ?? null] : [])])]),
   ]))
   // A custom exercise's muscles go with the entry, as Finish writes them: a device that deletes
   // the exercise without ever having seen this workout would otherwise leave its sets crediting

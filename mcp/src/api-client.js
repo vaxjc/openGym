@@ -10,6 +10,8 @@
    profile, so it only ever travels over https — plain http to this machine aside, the exception
    passkeys make too — and it is never put into a result or an error message. */
 
+import fs from 'node:fs'
+
 const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]', '::1'])
 // What a session token is made of (api/server.js makeSession: `uid:exp:ver` and a base64url MAC).
 // Checked before it goes into a header, because the header check's own error quotes the value.
@@ -39,9 +41,15 @@ export function apiBase(raw) {
 /** { base, token } from the environment, or ENOCONFIG saying what to set. */
 export function apiConfig(env = process.env) {
   const url = (env.OPENGYM_URL || '').trim()
-  const token = (env.OPENGYM_TOKEN || '').trim()
+  let token = (env.OPENGYM_TOKEN || '').trim()
+  // A file keeps the token out of the client's config, which several clients sync or show.
+  if (!token && env.OPENGYM_TOKEN_FILE) {
+    try { token = fs.readFileSync(env.OPENGYM_TOKEN_FILE, 'utf8').trim() } catch (e) {
+      throw fail('ENOCONFIG', `OPENGYM_TOKEN_FILE cannot be read (${e.code || e.name})`)
+    }
+  }
   if (!url || !token) {
-    throw fail('ENOCONFIG', 'logging workouts writes through your openGym server: set OPENGYM_URL and OPENGYM_TOKEN in this MCP server\'s config (mcp/README.md, "Logging workouts")')
+    throw fail('ENOCONFIG', 'logging workouts writes through your openGym server: set OPENGYM_URL and OPENGYM_TOKEN (or OPENGYM_TOKEN_FILE) in this MCP server\'s config (mcp/README.md, "Logging workouts")')
   }
   if (!TOKEN_CHARS.test(token)) {
     throw fail('ENOCONFIG', 'OPENGYM_TOKEN has characters a token never has (a line break or space from copying it?): paste it again as one line')
