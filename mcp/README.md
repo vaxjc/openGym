@@ -77,9 +77,13 @@ token instead of putting it in the client's config:
 ```jsonc
 "env": {
   "OPENGYM_URL": "https://gym.example.com",
-  "OPENGYM_TOKEN_FILE": "/Users/me/.config/opengym/token"
+  "OPENGYM_TOKEN_FILE": "/Users/me/.config/opengym/token",
+  "OPENGYM_REMOTE": "1"
 }
 ```
+
+`OPENGYM_REMOTE=1` reads from the server even when the client starts this process in a folder that
+happens to hold a `./data`.
 
 ## Tools
 

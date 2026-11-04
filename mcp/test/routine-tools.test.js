@@ -150,6 +150,12 @@ describe('remote reads', () => {
     expect(api.gets).toBe(2)
   })
 
+  test('OPENGYM_REMOTE=1 reads from the server even with a ./data folder here', () => {
+    fs.mkdirSync(path.join(dir, 'data'))
+    expect(remoteMode(api.env)).toBe(false)
+    expect(remoteMode({ ...api.env, OPENGYM_REMOTE: '1' })).toBe(true)
+  })
+
   test('OPENGYM_TOKEN_FILE stands in for OPENGYM_TOKEN', () => {
     const f = path.join(dir, 'tok')
     fs.writeFileSync(f, TOKEN + '\n')

@@ -29,6 +29,9 @@ const REMOTE_TTL_MS = 5000
 // ./data, and a server to read from. A data directory, when there is one, always wins.
 export function remoteMode(env = process.env) {
   if (_seeded) return false
+  // OPENGYM_REMOTE=1 says so outright, for a client that starts this server in whatever folder
+  // it is in: a ./data that happens to be there is not this profile.
+  if (env.OPENGYM_REMOTE === '1' && !env.OPENGYM_DATA) return !!env.OPENGYM_URL
   if (env.OPENGYM_DATA || fs.existsSync(DATA_DIR)) return false
   return !!(env.OPENGYM_URL && (env.OPENGYM_TOKEN || env.OPENGYM_TOKEN_FILE))
 }
