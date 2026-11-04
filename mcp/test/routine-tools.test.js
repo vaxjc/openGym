@@ -150,10 +150,9 @@ describe('remote reads', () => {
     expect(api.gets).toBe(2)
   })
 
-  test('OPENGYM_REMOTE=1 reads from the server even with a ./data folder here', () => {
-    fs.mkdirSync(path.join(dir, 'data'))
-    expect(remoteMode(api.env)).toBe(false)
-    expect(remoteMode({ ...api.env, OPENGYM_REMOTE: '1' })).toBe(true)
+  test('OPENGYM_REMOTE=1 turns remote reads on with just a URL; an explicit OPENGYM_DATA still wins', () => {
+    expect(remoteMode({ OPENGYM_URL: api.env.OPENGYM_URL, OPENGYM_REMOTE: '1' })).toBe(true)
+    expect(remoteMode({ ...api.env, OPENGYM_REMOTE: '1', OPENGYM_DATA: dir })).toBe(false)
   })
 
   test('OPENGYM_TOKEN_FILE stands in for OPENGYM_TOKEN', () => {
